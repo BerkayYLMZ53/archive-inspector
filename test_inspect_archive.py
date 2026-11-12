@@ -78,6 +78,23 @@ class ArchiveTests(unittest.TestCase):
         with self.assertRaises(zipfile.BadZipFile):
             self.inspect(verify=True)
 
+    def test_invalid_zstandard_stream_is_a_cli_error(self):
+        try:
+            from compression.zstd import ZstdError
+        except ImportError:
+            self.skipTest("Zstandard desteği yok")
+        with zipfile.ZipFile(self.file, "w", compression=zipfile.ZIP_ZSTANDARD) as archive:
+            archive.writestr("file.txt", b"recognizable data" * 32)
+        frame_magic = b"\x28\xb5\x2f\xfd"
+        original = self.file.read_bytes()
+        self.assertIn(frame_magic, original)
+        self.file.write_bytes(original.replace(frame_magic, b"BAD!", 1))
+        with self.assertRaises(ZstdError):
+            self.inspect(verify=True)
+        with contextlib.redirect_stderr(io.StringIO()) as errors:
+            self.assertEqual(main([str(self.file), "--verify"]), 2)
+        self.assertIn("Hata:", errors.getvalue())
+
     def test_non_zip_is_an_error(self):
         self.file.write_bytes(b"not a zip")
         with contextlib.redirect_stderr(io.StringIO()):

@@ -11,6 +11,13 @@ import sys
 import zipfile
 import zlib
 
+try:
+    from compression.zstd import ZstdError
+except ImportError:  # Python versions before 3.14 do not support this ZIP method.
+    ZIP_COMPRESSION_ERRORS = (zlib.error, lzma.LZMAError)
+else:
+    ZIP_COMPRESSION_ERRORS = (zlib.error, lzma.LZMAError, ZstdError)
+
 
 MIB = 1024 * 1024
 WINDOWS_DEVICE = re.compile(r"(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])\Z", re.IGNORECASE)
@@ -141,7 +148,7 @@ def main(argv=None):
     try:
         with zipfile.ZipFile(args.archive) as archive:
             report = inspect(archive, args.verify, args.max_mib * MIB)
-    except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, EOFError, zlib.error, lzma.LZMAError) as error:
+    except (OSError, ValueError, zipfile.BadZipFile, RuntimeError, EOFError, *ZIP_COMPRESSION_ERRORS) as error:
         print(f"Hata: {error}", file=sys.stderr)
         return 2
 
